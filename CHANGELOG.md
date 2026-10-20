@@ -6,6 +6,196 @@ PR — keep the `hyperdx-release-notes` comment marker intact when editing so yo
 edits survive regeneration. Per-package detail lives in each
 `packages/*/CHANGELOG.md`.
 
+## v2.42.0 — 2026-10-20
+
+<!-- hyperdx-release-notes version=2.42.0 inputs=ec181dedba40 -->
+
+**Ad hoc dashboard filters and docked alert editing**
+
+Dashboards gain ad hoc filters: add filters to a dashboard on the fly, have the
+conditions broadcast to every tile, and click a cell in a search or table tile
+to filter by that value without opening an editor. Chart alerts now open in a
+side panel docked beside the chart editor, so the preview chart stays in view
+while you tune the alert, and a new Content font size preference scales the
+search results table, data tables and chart labels when the default is too small
+to read comfortably. PromQL also moves onto sources — the
+`/api/v1/prometheus/*` routes now take a `sourceId`, and provisioned dashboards
+with PromQL tiles must set `source` before you upgrade.
+
+### 💥 Breaking Changes
+
+- **PromQL queries resolve through their source**: the `/api/v1/prometheus/*`
+  routes now take `sourceId` in place of `connectionId` and read the connection
+  and TimeSeries table from that PromQL source, so caller-supplied
+  `database`/`table` params are ignored for ClickHouse and are no longer
+  forwarded to external Prometheus endpoints. Saved PromQL chart configs now
+  require `source` and no longer persist `connection`, so update any provisioned
+  dashboard carrying PromQL tiles before upgrading (#3372, thanks
+  @karl-power!).
+- **ClickHouse is scraped in its own `clickhouse` job**:
+  `CLICKHOUSE_PROMETHEUS_METRICS_ENDPOINT` now accepts an `http://` or
+  `https://` URL as well as a bare `host:port`, and with `https://` both the
+  collector's `prometheusremotewrite` exporter and the OpAMP-managed scrape use
+  TLS and verify the server certificate against the system CAs — previously an
+  HTTPS-only endpoint could not receive metrics at all. Scraped ClickHouse
+  metrics now carry `job="clickhouse"` rather than `job="otelcol"`, so repoint
+  anything keyed on the old label, and note the collector now exits at startup
+  with a clear error if the endpoint includes a path or a scheme other than
+  `http` or `https`; a bare `host:port` keeps plain HTTP and is unchanged
+  (#3330, thanks @karl-power!).
+
+### ✨ New Features
+
+- **Ad hoc filters on any dashboard**: a dashboard can now carry filters you
+  configure once and fill in from the filter bar, with the conditions broadcast
+  to every tile rather than edited tile by tile. Clicking a cell in a search tile
+  or a group-by cell in a table tile turns that value into an ad hoc filter, and
+  importing a dashboard remaps its ad hoc filters onto your own sources (#3335,
+  #3341, #3343, #3366, #3367, #3380, #3389, thanks @pulpdrew!).
+- **Edit chart alerts in a docked side panel**: "Add alert" / "Edit alert" opens
+  a panel beside the chart editor that fills its visible height and resizes from
+  the left edge, so the preview chart stays in view while the alert is tuned.
+  Keep a new alert with "Add alert" or an existing one with "Update alert" —
+  closing the panel discards the changes — while the chart's own Save and Cancel
+  move up to the chart name row (#3222, thanks @teeohhem!).
+- **A content font size preference**: the small text in the log and trace tables
+  could only be adjusted with browser zoom, which shrinks the surrounding chrome
+  too. User preferences now carry a **Content font size** (small / medium /
+  large) that scales the search results table, data tables, expanded row JSON,
+  and chart axes, legends and tooltips; small is the default and matches the
+  previous sizes, so nothing changes until you opt in (#3166, thanks
+  @MikeShi42!).
+- **Heatmaps from PromQL metrics**: a PromQL query can now drive a distribution
+  heatmap calculated from its values, and a histogram heatmap built from bucket
+  metrics (#3326, #3332, thanks @pulpdrew!).
+- **Choose how a line is drawn between points**: time series tiles gain a line
+  interpolation display setting — smooth, linear or step — so a chart can be
+  drawn to suit the data behind it (#3393, thanks @pulpdrew!).
+- **Tile descriptions**: the tile editor gains a description field, stored on the
+  tile's chart config next to its name and shown as an info tooltip beside the
+  tile name. Series tile descriptions are accepted and kept by the external
+  Dashboards API too (#3352, #3403, thanks @felipe-carvalho12 and @karl-power!).
+- **`clickstack_sql` can target a source**: the MCP SQL tool now accepts an
+  optional `sourceId`, so `$__sourceTable` expands to that source's table.
+  Unknown sources, other teams' sources, and a source on a different connection
+  than `connectionId` are rejected, as is `$__sourceTable` with no `sourceId`
+  (#3355, thanks @squaredg!).
+- **The service map remembers your sampling rate**: the sampling rate you pick on
+  the service map is kept in local storage so it survives a reload; a
+  `samplingFactor` URL param still takes precedence (#3388, thanks @pulpdrew!).
+
+### 🔧 Improvements
+
+- **Finding keys inside Map and JSON filter groups**: groups such as
+  `LogAttributes` and `ResourceAttributes` in the search filter sidebar now have
+  a key search matching the value search on regular filters, sort their keys
+  alphabetically after keys with a selected value and pinned keys, and stay
+  expanded or collapsed when you scroll them out of view and back. The Filter
+  Keys Fetch Limit (default 100) also applies to each Map column now, so
+  `LogAttributes` keys no longer crowd out every other Map column (#3368, #3377,
+  #3392, #3397, thanks @knudtty!).
+- **Filter values appear as they arrive**: filter values stream into the UI as
+  each query finishes instead of the sidebar waiting for all of them (#3348,
+  thanks @knudtty!).
+- **Faster sessions and Database drawer queries**: the sessions query scopes its
+  trace scan to RUM services, and the Services > Database query drawer uses the
+  span attribute skip index instead of scanning the whole trace window (#3351,
+  #3358, thanks @archat-hash and @vinzee!).
+- **Row details open without the slow full-row lookup**: row details now resolve
+  with the primary key plus whichever of `_block_number` / `_block_offset` the
+  table persists, rather than falling back to a full-row lookup when only one of
+  `enable_block_number_column` / `enable_block_offset_column` is set (#3364,
+  thanks @knudtty!).
+- **Webhook body templates are checked before an alert fails**: the webhook form
+  compiles the body template as you edit it and shows the Handlebars error with
+  its line and column, and the API now rejects a generic or incident.io template
+  that doesn't compile — or that calls a helper delivery doesn't register, such
+  as a typo for `eq` — with a 400 on create, update and test. A new
+  `POST /api/v2/webhooks/validate` checks a webhook config without saving it, at
+  Terraform plan time for instance (#3350, #3365).
+- **The dashboard tile menu stays on screen**: a dashboard with many groups no
+  longer pushes the tile menu off screen — the group list moved into a scrollable
+  "Move to group" submenu (#3360, thanks @jordan-simonovski!).
+- **MCP tools stop leaving you to guess**: `clickstack_list_sources` now returns
+  each source's database-qualified `table` (and `database` for metric sources),
+  the `clickstack_sql` examples use `<table>` and `<timestampColumn>`
+  placeholders instead of `otel_logs` and `TimestampTime`, and unknown-table
+  errors point back at `clickstack_list_sources`. Every tool input is described,
+  descriptions that only restated schema constraints are gone, tool descriptions
+  fit under Claude Code's 2 KB limit, every tool declares whether it is
+  read-only, destructive, idempotent and open-world so a client knows what
+  calling it will do, and the server advertises a title, description, website URL
+  and icon in its initialize response and records the response size of each tool
+  call (#3354, #3394, #3395, #3396, #3408, thanks @squaredg!).
+- **More of the UI on ClickHouse's click-ui badges**: the sidebar "Beta", "UTC"
+  and instance label badges, the "Latest", "New" and "Breaking" badges in What's
+  new, the Kubernetes dashboard and its node, namespace and pod drawers, the
+  model, provider, tool, agent and chat role badges in the LLM views, and
+  dashboard and alert tags along with the settings badges all now use the
+  click-ui `Badge` (#3363, #3373, #3378, #3398, thanks @hoorayimhelping!).
+
+### 🐛 Bug Fixes
+
+- **A sub-second search start no longer drops rows**: the time filter start is
+  floored to the precision of a coarse timestamp column (DateTime, or DateTime64
+  below millisecond) when a finer column also filters the range, so a sub-second
+  start keeps the rest of that tick. The external API v2 search `maxResults` cap
+  is configurable now through `EXTERNAL_API_SEARCH_MAX_RESULTS`, defaulting to
+  the previously hardcoded 2000 (#3381, thanks @vinzee!).
+- **Percentile aggregations render as a function ClickHouse has**: a chart config
+  with `aggFn: 'p95'` compiled to the nonexistent `p95If`, so `p50`, `p90`, `p95`
+  and `p99` now render as `quantile` at the matching level. The AI assistant
+  returns percentiles with a level instead of a bare `quantile` (median), and v1
+  metric chart conversion keeps the percentile level (#3357, thanks @octo47!).
+- **Legacy `STATUS_CODE_ERROR` spans count as errors**: the Services and LLM
+  dashboards undercounted errors from collectors that emit the long status form.
+  The errored-span definition now lives in one place and matches both that value
+  and the short `Error` form (#3181, thanks @alex-fedotyev!).
+- **Multi-column ORDER BY without a direction**: ordering by several columns with
+  no explicit asc/desc caused a query error, and the table's sort state is now
+  tracked correctly (#3371, thanks @pulpdrew!).
+- **Expanding a row on a table with an `id` column**: row details now keep the
+  internal WHERE-clause id instead of having it overwritten by the raw value of a
+  string `id` column (#3386, thanks @wanjinhao1!).
+- **The ClickHouse proxy forwards request bodies as it read them**: the bytes
+  consumed by the proxy's body parsers are passed on without changing JSON
+  values, form fields or text encodings, request framing is kept in sync with
+  inflated bytes, and an unparsed multipart stream is preserved as it is (#3383,
+  thanks @adityareddy-dev!).
+- **The time picker keeps the year you chose**: a selected date range no longer
+  resets to the current year — the range text includes the year when the range
+  isn't in the current year or reaches into the future, so it survives being
+  re-parsed (#3356, thanks @karl-power!).
+- **Multi-line SQL survives a search replay**: search replay links now preserve
+  multi-line SQL (#3382, thanks @pulpdrew!).
+- **Release marker tooltips wrap long values**: a long value in a release marker
+  tooltip wraps instead of overflowing the tooltip (#3391, thanks @MikeShi42!).
+- **`clickstack_sql` binds the bucket-size parameters it advertises**:
+  `{intervalSeconds:Int64}`, `{intervalMilliseconds:Int64}`, `$__interval_s`,
+  `$__timeInterval` and `$__timeInterval_ms` used to fail with "Substitution
+  intervalSeconds is not set" — including in the tool's own time-series example
+  (#3353, thanks @squaredg!).
+- **Alerts on a saved search created over MCP read its filter as Lucene**: when
+  `clickstack_save_saved_search` created a search without a `whereLanguage`, the
+  field was left unset and an alert on that search parsed the saved Lucene filter
+  as SQL. New searches now store `lucene` explicitly (#3404).
+- **The collector stops logging `ParseJSON` errors for non-JSON logs**: a log
+  body containing braces but no JSON — a Go struct or Python dict dump, say —
+  logged a syntax error for every line. JSON extraction now only matches objects
+  that start with a quoted key, and remaining parse failures in that statement
+  group are silenced (#3336).
+
+<!-- hyperdx-package-list -->
+
+### 📦 Package changelogs
+
+- `@hyperdx/api` 2.41.0 → 2.42.0 — [changelog](https://github.com/hyperdxio/hyperdx/blob/main/packages/api/CHANGELOG.md#2420)
+- `@hyperdx/app` 2.41.0 → 2.42.0 — [changelog](https://github.com/hyperdxio/hyperdx/blob/main/packages/app/CHANGELOG.md#2420)
+- `@hyperdx/common-utils` 0.31.0 → 0.31.1 — [changelog](https://github.com/hyperdxio/hyperdx/blob/main/packages/common-utils/CHANGELOG.md#0311)
+- `@hyperdx/otel-collector` 2.41.0 → 2.42.0 — [changelog](https://github.com/hyperdxio/hyperdx/blob/main/packages/otel-collector/CHANGELOG.md#2420)
+
+<!-- /hyperdx-package-list -->
+
 ## v2.41.0 — 2026-10-09
 
 <!-- hyperdx-release-notes version=2.41.0 inputs=3cd9796f20ec -->
