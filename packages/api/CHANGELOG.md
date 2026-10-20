@@ -1,5 +1,81 @@
 # @hyperdx/api
 
+## 2.42.0
+
+### Patch Changes
+
+- 9891a791: feat: Add ad hoc dashboard filter schemas and types
+- 0000fa4b: feat: Add a line interpolation display setting (smooth, linear, step)
+- ee9f84b2: feat(mcp): record the response size of each MCP tool call
+- 24d324c2: fix(mcp): store whereLanguage as lucene when clickstack_save_saved_search creates a search without one, so its alerts no longer parse a Lucene filter as SQL
+- 748315d7: feat(mcp): advertise a title, description, website URL, and SVG icon in the MCP server's initialize response
+- cdfae457: fix(mcp): `clickstack_sql` now binds the bucket-size parameters its description
+  advertises. `{intervalSeconds:Int64}`, `{intervalMilliseconds:Int64}`,
+  `$__interval_s`, `$__timeInterval` and `$__timeInterval_ms` used to fail with
+  "Substitution intervalSeconds is not set", including the tool's own time-series
+  example.
+- b00d4100: feat(mcp): `clickstack_sql` accepts an optional `sourceId`, so `$__sourceTable`
+  expands to that source's table. Unknown sources, other teams' sources, and a
+  source on a different connection than `connectionId` are rejected, as is
+  `$__sourceTable` without a `sourceId`.
+- a06b17fb: fix(mcp): stop `clickstack_sql` callers from guessing table and timestamp column
+  names. `clickstack_list_sources` now returns each source's database-qualified
+  `table` (and `database` for metric sources), the `sql` examples use `<table>`
+  and `<timestampColumn>` placeholders instead of `otel_logs` and `TimestampTime`,
+  and unknown-table errors from `clickstack_sql` point at `clickstack_list_sources`.
+- e494a46d: feat(mcp): declare readOnlyHint, destructiveHint, idempotentHint, and openWorldHint on every MCP tool
+- 03f9fd5a: fix(mcp): describe every MCP tool input, drop descriptions that restate schema constraints, and keep tool descriptions under Claude Code's 2 KB limit
+- 5cabc115: feat: Support distribution heatmaps calculated from promql data
+- a4b63953: fix: render percentile aggregations (`p50`, `p90`, `p95`, `p99`) as `quantile`
+  at the matching level. A chart config with `aggFn: 'p95'` rendered as the
+  nonexistent ClickHouse function `p95If`. The AI assistant now returns
+  percentiles with a level instead of a bare `quantile` (median), and v1 metric
+  chart conversion keeps the percentile level.
+- ca8e3fda: fix: support https for the PromQL remote-write endpoint and ClickHouse scraping
+
+  `CLICKHOUSE_PROMETHEUS_METRICS_ENDPOINT` now accepts an `http://` or `https://` URL as well as a bare `host:port`. With `https://`, the collector's `prometheusremotewrite` exporter sends metrics over TLS and verifies the server certificate against the system CAs. Previously the exporter always used plain HTTP, so an HTTPS-only endpoint could not receive metrics. This applies to both standalone and OpAMP-managed collectors.
+
+  A bare `host:port` keeps plain HTTP, so existing setups are unchanged. The value must not include a path (`/write` is still appended automatically); the collector now exits at startup with a clear error if it does, or if the scheme is anything other than `http` or `https`.
+
+  The OpAMP-managed collector scraped the endpoint over plain HTTP regardless of its scheme. ClickHouse is now scraped in its own `clickhouse` job (previously the `otelcol` job) using the endpoint's scheme, with TLS verification on. The collector's own metrics endpoint stays on plain HTTP. A bare `host:port` or `http://` endpoint behaves as before. Scraped ClickHouse metrics now carry `job="clickhouse"` instead of `job="otelcol"`.
+
+- c94d12c3: fix: Resolve PromQL queries through the source instead of a caller-supplied connection and table
+
+  The `/api/v1/prometheus/*` routes now take `sourceId` instead of `connectionId`, and read the connection and TimeSeries table from that PromQL source. Caller-supplied `database`/`table` params are ignored for ClickHouse and no longer forwarded to external Prometheus endpoints. Saved PromQL chart configs now require `source` and no longer persist `connection`, so provisioned dashboards with PromQL tiles must set `source`.
+
+- be5304dd: Forward the bytes consumed by the ClickHouse proxy's body parsers without
+  changing JSON values, form fields or text encodings. Keep request framing in
+  sync with inflated bytes and preserve unparsed multipart streams.
+- af6e7f6b: Add a description field to the tile editor. The description is now stored on the
+  tile's chart config next to its name, and is kept for series tiles in the
+  external Dashboards API.
+- 02080f20: Add an optional tile description, accepted by the external Dashboards API and
+  shown as an info tooltip next to the tile name.
+- 28168ae6: fix: Floor the time filter start to the precision of a coarse timestamp column (DateTime, DateTime64 below ms) when a finer column also filters the range, so a sub-second start no longer drops the rest of that tick; make the external API v2 search `maxResults` cap configurable via `EXTERNAL_API_SEARCH_MAX_RESULTS` (defaults to 2000, the previous hardcoded value)
+- ecddea2a: fix: reject generic and incident.io webhook body templates that don't compile,
+  or that call a helper delivery doesn't register (e.g. a typo for `eq`), with a
+  400 on create, update, and test (internal API, External API v2, and MCP
+  `clickstack_save_webhook`). Add `POST /api/v2/webhooks/validate` to check a
+  webhook config without saving it, e.g. at Terraform plan time.
+- Updated dependencies [92058236]
+- Updated dependencies [3e9185d1]
+- Updated dependencies [180a1f1d]
+- Updated dependencies [a682ce13]
+- Updated dependencies [9891a791]
+- Updated dependencies [43b09a7d]
+- Updated dependencies [0000fa4b]
+- Updated dependencies [03f9fd5a]
+- Updated dependencies [5cabc115]
+- Updated dependencies [a4b63953]
+- Updated dependencies [3bedfab3]
+- Updated dependencies [c94d12c3]
+- Updated dependencies [85675fc8]
+- Updated dependencies [af6e7f6b]
+- Updated dependencies [02080f20]
+- Updated dependencies [28168ae6]
+- Updated dependencies [807cd9a5]
+  - @hyperdx/common-utils@0.31.1
+
 ## 2.41.0
 
 ### Minor Changes
